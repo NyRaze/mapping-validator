@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""
+mapping_validator.py
+
+Small standalone utility to validate a "mapping.txt" file used by texture-swap
+tools: each non-comment line has the form
+
+    key;filename.png
+
+This script checks that:
+  - every line is well-formed (exactly one ';' separator)
+  - every referenced image file actually exists in the images folder
+  - there are no duplicate keys
+
+Usage:
+    python validate_mapping.py mapping.txt images/
+"""
+
+import sys
+from pathlib import Path
+
+
+def validate(mapping_path: Path, images_dir: Path) -> int:
+    errors = 0
+    seen_keys = {}
+
+    lines = mapping_path.read_text(encoding="utf-8").splitlines()
+
+    for line_number, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if ";" not in line:
+            print(f"[line {line_number}] missing ';' separator: {raw_line!r}")
+            errors += 1
+            continue
+
+        key, _, filename = line.partition(";")
+        key = key.strip()
+        filename = filename.strip()
+
+        if not key or not filename:
+            print(f"[line {line_number}] empty key or filename: {raw_line!r}")
+            errors += 1
+            continue
+
+        if key in seen_keys:
+            print(f"[line {line_number}] duplicate key '{key}' (first seen at line {seen_keys[key]})")
+            errors += 1
+        else:
+            seen_keys[key] = line_number
+
+        image_path = images_dir / filename
+        if not image_path.is_file():
+            print(f"[line {line_number}] image not found: {image_path}")
+            errors += 1
+
+    return errors
+
+
+def main() -> None:
+    if len(sys.argv) != 3:
+        print("Usage: python validate_mapping.py <mapping.txt> <images_dir>")
+        sys.exit(2)
+
+    mapping_path = Path(sys.argv[1])
+    images_dir = Path(sys.argv[2])
+
+    if not mapping_path.is_file():
+        print(f"mapping file not found: {mapping_path}")
+        sys.exit(2)
+    if not images_dir.is_dir():
+        print(f"images directory not found: {images_dir}")
+        sys.exit(2)
+
+    errors = validate(mapping_path, images_dir)
+
+    if errors:
+        print(f"\n{errors} problem(s) found.")
+        sys.exit(1)
+
+    print("mapping.txt looks valid.")
+
+
+if __name__ == "__main__":
+    main()
